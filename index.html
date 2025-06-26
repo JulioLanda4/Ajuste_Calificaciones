@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ajuste de Calificaciones</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/milligram/1.4.1/milligram.min.css">
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <style>
+    body { max-width: 960px; margin: 30px auto; }
+    .grid { display: flex; gap: 10px; flex-wrap: wrap; }
+    .grid > div { flex: 1 1 calc(20% - 10px); }
+    label { font-size: 0.9rem; margin-bottom: 4px; display: block; }
+    input[type="number"], input[type="text"] { width: 100%; }
+    .buttons { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; }
+    table { width: 100%; margin-top: 20px; border-collapse: collapse; }
+    th, td { padding: 8px; text-align: center; border: 1px solid #ddd; font-size: 1.1rem; font-weight: 500; color: #333; }
+    th { background: #f4f4f4; }
+    #fileInput { flex: 1 1 auto; }
+  </style>
+</head>
+<body>
+  <h2>Ajuste de Calificaciones (Estático)</h2>
+  <label for="nombre">Nombre del Alumno</label>
+  <input type="text" id="nombre" placeholder="Ej. Juan Pérez">
+
+  <h4>Pesos (%)</h4>
+  <div class="grid">
+    <div><label for="peso1">Trabajos</label><input type="number" id="peso1" value="20"></div>
+    <div><label for="peso2">Examen</label><input type="number" id="peso2" value="20"></div>
+    <div><label for="peso3">Proyecto</label><input type="number" id="peso3" value="30"></div>
+    <div><label for="peso4">Participación</label><input type="number" id="peso4" value="20"></div>
+    <div><label for="peso5">Asistencia</label><input type="number" id="peso5" value="10"></div>
+  </div>
+
+  <h4>Calificaciones</h4>
+  <div class="grid">
+    <div><label for="cal1">Trabajos</label><input type="number" id="cal1" step="0.1"></div>
+    <div><label for="cal2">Examen</label><input type="number" id="cal2" step="0.1"></div>
+    <div><label for="cal3">Proyecto</label><input type="number" id="cal3" step="0.1"></div>
+    <div><label for="cal4">Participación</label><input type="number" id="cal4" step="0.1"></div>
+    <div><label for="cal5">Asistencia</label><input type="number" id="cal5" step="0.1"></div>
+  </div>
+
+  <div class="buttons">
+    <button id="btnCalculate" class="button">Calcular</button>
+    <button id="btnDelete" class="button">Borrar último</button>
+    <button id="btnClear" class="button">Borrar todo</button>
+    <input type="file" id="fileInput" accept=".xlsx,.xls">
+    <button id="btnCopy" class="button">Copiar Ajustadas</button>
+    <button id="btnExport" class="button">Exportar Ajustadas</button>
+  </div>
+
+  <table id="tableReal">
+    <thead>
+      <tr><th>Nombre</th><th>Trabajos</th><th>Examen</th><th>Proyecto</th><th>Participación</th><th>Asistencia</th><th>Original</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <table id="tableAjust">
+    <thead>
+      <tr><th>Nombre</th><th>Trabajos</th><th>Examen</th><th>Proyecto</th><th>Participación</th><th>Asistencia</th><th>Ajustado</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    function ajustar_calificaciones(calificaciones, pesos_percent) {
+      const pesos = pesos_percent.map(p => p/100);
+      const po = pesos.reduce((sum, p, i) => sum + p * calificaciones[i], 0);
+      let ca = calificaciones.map(c => Math.max(5, Math.round(c)));
+      let pa = pesos.reduce((sum, p, i) => sum + p * ca[i], 0);
+      let d = Math.round((po - pa) * 100) / 100;
+      let it = 0;
+      while (Math.abs(d) > 0.01 && it < 100) {
+        for (let i = 0; i < ca.length; i++) {
+          if (d > 0 && ca[i] < 10) { ca[i] += 0.1; break; }
+          if (d < 0 && ca[i] > 5)  { ca[i] -= 0.1; break; }
+        }
+        pa = pesos.reduce((sum, p, i) => sum + p * ca[i], 0);
+        d = Math.round((po - pa) * 100) / 100;
+        it++;
+      }
+      ca = ca.map(c => Math.max(5, Math.round(c)));
+      return { ajustadas: ca, original: Math.round(po*100)/100, ajustado: Math.round(pa*100)/100 };
+    }
+
+    document.getElementById('btnCalculate').onclick = () => {
+      const nombre = document.getElementById('nombre').value.trim();
+      const pesos = [1,2,3,4,5].map(i => +document.getElementById('peso'+i).value);
+      const cal = [1,2,3,4,5].map(i => +document.getElementById('cal'+i).value);
+      const { ajustadas, original, ajustado } = ajustar_calificaciones(cal, pesos);
+      const rowReal = `<tr><td>${nombre}</td>${cal.map(v=>`<td>${v}</td>`).join('')}<td>${original}</td></tr>`;
+      const rowAdj = `<tr><td>${nombre}</td>${ajustadas.map(v=>`<td>${v}</td>`).join('')}<td>${ajustado}</td></tr>`;
+      document.querySelector('#tableReal tbody').insertAdjacentHTML('beforeend', rowReal);
+      document.querySelector('#tableAjust tbody').insertAdjacentHTML('beforeend', rowAdj);
+    };
+
+    document.getElementById('btnDelete').onclick = () => {
+      ['tableReal','tableAjust'].forEach(id => {
+        const tb = document.querySelector('#'+id+' tbody');
+        if (tb.lastElementChild) tb.removeChild(tb.lastElementChild);
+      });
+    };
+
+    document.getElementById('btnClear').onclick = () => {
+      ['tableReal','tableAjust'].forEach(id => {
+        document.querySelector('#'+id+' tbody').innerHTML = '';
+      });
+    };
+
+    document.getElementById('fileInput').onchange = e => {
+      const reader = new FileReader();
+      reader.onload = async evt => {
+        const wb = XLSX.read(evt.target.result, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+        const pesos = [1,2,3,4,5].map(i => +document.getElementById('peso'+i).value);
+        for (const r of rows) {
+          const cal = ['Trabajos','Examen','Proyecto','Participación','Asistencia'].map(col => parseFloat(r[col]||0));
+          const { ajustadas, original, ajustado } = ajustar_calificaciones(cal, pesos);
+          const rowReal = `<tr><td>${r.Nombre}</td>${cal.map(v=>`<td>${v}</td>`).join('')}<td>${original}</td></tr>`;
+          const rowAdj = `<tr><td>${r.Nombre}</td>${ajustadas.map(v=>`<td>${v}</td>`).join('')}<td>${ajustado}</td></tr>`;
+          document.querySelector('#tableReal tbody').insertAdjacentHTML('beforeend', rowReal);
+          document.querySelector('#tableAjust tbody').insertAdjacentHTML('beforeend', rowAdj);
+        }
+      };
+      reader.readAsArrayBuffer(e.target.files[0]);
+      e.target.value = '';
+    };
+
+    document.getElementById('btnCopy').onclick = () => {
+      const rows = [...document.querySelectorAll('#tableAjust tbody tr')]
+        .map(tr => [...tr.children].map(td => td.innerText).join('\t'))
+        .join('\n');
+      navigator.clipboard.writeText(rows);
+    };
+
+    document.getElementById('btnExport').onclick = () => {
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.table_to_sheet(document.getElementById('tableAjust'));
+      XLSX.utils.book_append_sheet(wb, ws, 'Ajustadas');
+      XLSX.writeFile(wb, 'calificaciones_ajustadas.xlsx');
+    };
+  </script>
+</body>
+</html>
